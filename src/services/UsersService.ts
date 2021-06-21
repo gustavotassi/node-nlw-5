@@ -30,6 +30,13 @@ class UsersService {
     // Retorna o user que foi criado
     return user;
   }
+
+  async findByEmail(email: string) {
+    const user = await this.usersRepository.findOne({
+      email,
+    });
+    return user;
+  }
 }
 
 export { UsersService };
