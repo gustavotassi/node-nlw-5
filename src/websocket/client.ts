@@ -18,9 +18,9 @@ io.on("connect", (socket) => {
     const { text, email } = params as IParams;
     let user_id = null;
 
-    const userAlreadyExists = await usersService.findByEmail(email);
+    const userExists = await usersService.findByEmail(email);
 
-    if (!userAlreadyExists) {
+    if (!userExists) {
       const user = await usersService.create(email);
 
       await connectionsService.create({
@@ -30,16 +30,14 @@ io.on("connect", (socket) => {
 
       user_id = user.id;
     } else {
-      user_id = userAlreadyExists.id;
+      user_id = userExists.id;
 
-      const connection = await connectionsService.findByUserId(
-        userAlreadyExists.id
-      );
+      const connection = await connectionsService.findByUserId(userExists.id);
 
       if (!connection) {
         await connectionsService.create({
           socket_id,
-          user_id: userAlreadyExists.id,
+          user_id: userExists.id,
         });
       } else {
         connection.socket_id = socket_id;
@@ -52,5 +50,34 @@ io.on("connect", (socket) => {
       text,
       user_id,
     });
+
+    const allMessages = await messagesService.listByUser(user_id);
+
+    socket.emit("client_list_all_messages", allMessages);
+
+    const allUsers = await connectionsService.findAllWithoutAdmin();
+    io.emit("admin_list_all_users", allUsers);
+  });
+
+  socket.on("client_send_to_admin", async (params) => {
+    const { text, socket_admin_id } = params;
+
+    const socket_id = socket.id;
+
+    const { user_id } = await connectionsService.findBySocketId(socket_id);
+
+    const message = await messagesService.create({
+      text,
+      user_id,
+    });
+
+    io.to(socket_admin_id).emit("admin_receive_message", {
+      message,
+      socket_id,
+    });
+  });
+
+  socket.on("disconnect", async () => {
+    await connectionsService.deleteBySocketId(socket.id);
   });
 });
